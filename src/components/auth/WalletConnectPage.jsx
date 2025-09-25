@@ -12,14 +12,21 @@ export const WalletConnectPage = ({ onComplete, onSkip }) => {
   useEffect(() => {
     // 팬텀 지갑 설치 여부 확인
     const checkPhantomInstalled = () => {
-      const isPhantomInstalled = window.solana && window.solana.isPhantom;
+      // 더 안전한 방식으로 Phantom 확인
+      const isPhantomInstalled = typeof window !== 'undefined' && 
+        window.solana && 
+        window.solana.isPhantom &&
+        window.solana.connect;
       setPhantomInstalled(isPhantomInstalled);
     };
 
-    checkPhantomInstalled();
+    // 페이지 로드 후 약간의 지연을 두고 확인 (Phantom이 완전히 로드되기를 기다림)
+    setTimeout(checkPhantomInstalled, 500);
     
     // 페이지 포커스 시 다시 확인
-    const handleFocus = () => checkPhantomInstalled();
+    const handleFocus = () => {
+      setTimeout(checkPhantomInstalled, 100);
+    };
     window.addEventListener('focus', handleFocus);
     
     return () => window.removeEventListener('focus', handleFocus);
@@ -35,7 +42,21 @@ export const WalletConnectPage = ({ onComplete, onSkip }) => {
     setError('');
 
     try {
-      const response = await window.solana.connect();
+      // Phantom이 이미 연결되어 있는지 확인
+      if (window.solana.isConnected) {
+        await window.solana.disconnect();
+      }
+
+      // 연결 시도 전에 잠시 대기
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // onlyIfTrusted: false로 설정하여 사용자 승인을 명시적으로 요청
+      const response = await window.solana.connect({ onlyIfTrusted: false });
+      
+      if (!response || !response.publicKey) {
+        throw new Error('지갑 연결 응답이 올바르지 않습니다.');
+      }
+
       const address = response.publicKey.toString();
       
       setWalletAddress(address);
@@ -57,10 +78,18 @@ export const WalletConnectPage = ({ onComplete, onSkip }) => {
 
     } catch (err) {
       console.error('Phantom wallet connection error:', err);
-      if (err.code === 4001) {
+      
+      // 더 구체적인 에러 처리
+      if (err.code === 4001 || err.message?.includes('User rejected')) {
         setError('사용자가 연결을 거부했습니다.');
+      } else if (err.code === -32002) {
+        setError('팬텀 지갑에서 이미 연결 요청을 처리 중입니다. 팬텀 창을 확인해주세요.');
+      } else if (err.message?.includes('wallet not found') || err.message?.includes('not installed')) {
+        setError('팬텀 지갑을 찾을 수 없습니다. 설치 후 페이지를 새로고침해주세요.');
+      } else if (err.message?.includes('Unexpected error')) {
+        setError('팬텀 지갑과 연결할 수 없습니다. 지갑을 잠금 해제하고 다시 시도해주세요.');
       } else {
-        setError('지갑 연결에 실패했습니다. 다시 시도해주세요.');
+        setError(`지갑 연결에 실패했습니다: ${err.message || '알 수 없는 오류'}`);
       }
     } finally {
       setConnecting(false);
@@ -69,6 +98,23 @@ export const WalletConnectPage = ({ onComplete, onSkip }) => {
 
   const openPhantomDownload = () => {
     window.open('https://phantom.app/', '_blank');
+  };
+
+  // Phantom 지갑 상태 재확인
+  const recheckPhantom = () => {
+    setTimeout(() => {
+      const isPhantomInstalled = typeof window !== 'undefined' && 
+        window.solana && 
+        window.solana.isPhantom &&
+        window.solana.connect;
+      setPhantomInstalled(isPhantomInstalled);
+      
+      if (!isPhantomInstalled) {
+        setError('팬텀 지갑이 아직 감지되지 않습니다. 확장 프로그램이 활성화되어 있는지 확인해주세요.');
+      } else {
+        setError('');
+      }
+    }, 500);
   };
 
   return (
@@ -133,11 +179,11 @@ export const WalletConnectPage = ({ onComplete, onSkip }) => {
               </button>
               
               <button
-                onClick={() => window.location.reload()}
+                onClick={recheckPhantom}
                 className="flex items-center justify-center space-x-2 w-full text-gray-600 hover:text-gray-800 text-sm"
               >
                 <RefreshCw className="h-4 w-4" />
-                <span>설치 후 새로고침</span>
+                <span>설치 확인</span>
               </button>
             </div>
           ) : (
@@ -174,6 +220,18 @@ export const WalletConnectPage = ({ onComplete, onSkip }) => {
                   </>
                 )}
               </button>
+
+              {/* 문제 해결 버튼 */}
+              {!connecting && !walletAddress && (
+                <div className="mt-4">
+                  <button
+                    onClick={recheckPhantom}
+                    className="text-sm text-gray-500 hover:text-gray-700 underline"
+                  >
+                    연결에 문제가 있나요? 지갑 상태 다시 확인하기
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -216,16 +274,18 @@ export const WalletConnectPage = ({ onComplete, onSkip }) => {
           </div>
         </div>
 
-        {/* 보안 안내 */}
+        {/* 문제 해결 안내 */}
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-start space-x-2">
             <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
             <div className="text-sm text-blue-800">
-              <p className="font-medium mb-1">보안 안내</p>
-              <p>
-                지갑 연결 시 개인키는 절대 공유되지 않으며, 
-                모든 거래는 사용자의 승인 하에 이루어집니다.
-              </p>
+              <p className="font-medium mb-1">연결 문제 해결 방법</p>
+              <ul className="space-y-1 text-xs">
+                <li>• 팬텀 지갑이 잠금 해제되어 있는지 확인</li>
+                <li>• 브라우저에서 팬텀 확장 프로그램 활성화 확인</li>
+                <li>• 다른 dApp에서 지갑이 이미 연결 중인지 확인</li>
+                <li>• 페이지 새로고침 후 다시 시도</li>
+              </ul>
             </div>
           </div>
         </div>

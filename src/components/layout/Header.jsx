@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Search, Bell, ChevronDown, User, Wallet, Wifi } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
-export const Header = ({ user, onWalletConnect }) => {
+export const Header = ({ onWalletConnect }) => {
+  const { user, logout } = useAuth();
   const [searchValue, setSearchValue] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -134,6 +136,10 @@ export const Header = ({ user, onWalletConnect }) => {
 
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1">
+                  <div className="px-4 py-2 border-b border-gray-100">
+                    <p className="text-sm font-medium text-gray-900">{user?.name}</p>
+                    <p className="text-xs text-gray-600">{user?.email}</p>
+                  </div>
                   <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     프로필
                   </Link>
@@ -141,7 +147,10 @@ export const Header = ({ user, onWalletConnect }) => {
                     설정
                   </Link>
                   <div className="border-t border-gray-100 mt-1 pt-1">
-                    <button className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <button 
+                      onClick={logout}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
                       로그아웃
                     </button>
                   </div>

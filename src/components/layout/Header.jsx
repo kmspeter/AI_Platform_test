@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
 import { Search, Bell, ChevronDown, User, Wallet, Wifi } from 'lucide-react';
-      // 지갑 연결 해제
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 export const Header = ({ onWalletConnect }) => {
-      // 팬텀 지갑 연결 시도
-      connectPhantomWallet();
+  const { user, updateUser, logout } = useAuth();
+  const [searchValue, setSearchValue] = useState('');
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showStatusDetail, setShowStatusDetail] = useState(false);
+
+  const notifications = [
+    { id: 1, type: 'system', message: '새로운 모델이 업데이트되었습니다', time: '30분 전' },
     { id: 2, type: 'payment', message: '결제가 처리되었습니다', time: '1시간 전' },
     { id: 3, type: 'session', message: '새 세션이 생성되었습니다', time: '2시간 전' }
   ];
+
   const connectPhantomWallet = async () => {
     if (!window.solana || !window.solana.isPhantom) {
       alert('팬텀 지갑이 설치되지 않았습니다. https://phantom.app/ 에서 설치해주세요.');
@@ -35,6 +41,23 @@ export const Header = ({ onWalletConnect }) => {
       } else {
         alert('지갑 연결에 실패했습니다.');
       }
+    }
+  };
+
+  const handleWalletConnect = () => {
+    if (user?.wallet?.connected) {
+      // 지갑 연결 해제
+      updateUser({
+        wallet: {
+          connected: false,
+          address: null,
+          network: null,
+          provider: null
+        }
+      });
+    } else {
+      // 팬텀 지갑 연결 시도
+      connectPhantomWallet();
     }
   };
 
@@ -137,7 +160,7 @@ export const Header = ({ onWalletConnect }) => {
 
             {/* Wallet Connection - Text Button with Icon */}
             <button
-              onClick={onWalletConnect}
+              onClick={handleWalletConnect}
               className={`flex items-center space-x-2 px-4 py-2.5 rounded-lg transition-colors text-sm font-medium ${
                 user?.wallet?.connected 
                   ? 'bg-green-600 text-white hover:bg-green-700' 

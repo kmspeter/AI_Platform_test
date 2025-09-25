@@ -1,20 +1,42 @@
 import React, { useState } from 'react';
 import { Search, Bell, ChevronDown, User, Wallet, Wifi } from 'lucide-react';
+      // 지갑 연결 해제
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 export const Header = ({ onWalletConnect }) => {
-  const { user, logout } = useAuth();
-  const [searchValue, setSearchValue] = useState('');
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showStatusDetail, setShowStatusDetail] = useState(false);
-
-  const notifications = [
-    { id: 1, type: 'training', message: '모델 훈련이 완료되었습니다', time: '5분 전' },
+      // 팬텀 지갑 연결 시도
+      connectPhantomWallet();
     { id: 2, type: 'payment', message: '결제가 처리되었습니다', time: '1시간 전' },
     { id: 3, type: 'session', message: '새 세션이 생성되었습니다', time: '2시간 전' }
   ];
+  const connectPhantomWallet = async () => {
+    if (!window.solana || !window.solana.isPhantom) {
+      alert('팬텀 지갑이 설치되지 않았습니다. https://phantom.app/ 에서 설치해주세요.');
+      return;
+    }
+
+    try {
+      const response = await window.solana.connect();
+      const address = response.publicKey.toString();
+      
+      updateUser({
+        wallet: {
+          connected: true,
+          address: address,
+          network: 'Solana',
+          provider: 'Phantom'
+        }
+      });
+    } catch (error) {
+      console.error('Phantom wallet connection failed:', error);
+      if (error.code === 4001) {
+        alert('지갑 연결이 거부되었습니다.');
+      } else {
+        alert('지갑 연결에 실패했습니다.');
+      }
+    }
+  };
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -116,10 +138,19 @@ export const Header = ({ onWalletConnect }) => {
             {/* Wallet Connection - Text Button with Icon */}
             <button
               onClick={onWalletConnect}
-              className="flex items-center space-x-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              className={`flex items-center space-x-2 px-4 py-2.5 rounded-lg transition-colors text-sm font-medium ${
+                user?.wallet?.connected 
+                  ? 'bg-green-600 text-white hover:bg-green-700' 
+                  : 'bg-purple-600 text-white hover:bg-purple-700'
+              }`}
             >
               <Wallet className="h-4 w-4" />
-              <span>{user?.wallet?.connected ? '지갑 연결됨' : '지갑 연결'}</span>
+              <span>
+                {user?.wallet?.connected 
+                  ? `${user.wallet.address?.slice(0, 4)}...${user.wallet.address?.slice(-4)}` 
+                  : '지갑 연결'
+                }
+              </span>
             </button>
 
             {/* User Avatar */}
@@ -139,6 +170,11 @@ export const Header = ({ onWalletConnect }) => {
                   <div className="px-4 py-2 border-b border-gray-100">
                     <p className="text-sm font-medium text-gray-900">{user?.name}</p>
                     <p className="text-xs text-gray-600">{user?.email}</p>
+                    {user?.wallet?.connected && (
+                      <p className="text-xs text-purple-600 mt-1">
+                        {user.wallet.provider} 연결됨
+                      </p>
+                    )}
                   </div>
                   <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     프로필

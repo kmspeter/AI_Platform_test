@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginPage } from './components/auth/LoginPage';
+import { WalletConnectPage } from './components/auth/WalletConnectPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { Layout } from './components/layout/Layout';
 import { Market } from './pages/Market';
@@ -16,7 +17,7 @@ import { Checkout } from './pages/Checkout';
 import { PurchaseComplete } from './pages/PurchaseComplete';
 
 const AppContent = () => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, needsWalletConnection, skipWalletConnection, updateUser } = useAuth();
 
   if (loading) {
     return (
@@ -33,6 +34,16 @@ const AppContent = () => {
     return <LoginPage />;
   }
 
+  if (needsWalletConnection) {
+    return (
+      <WalletConnectPage 
+        onComplete={() => {
+          // 지갑 연결 완료 후 메인 앱으로 이동
+        }}
+        onSkip={skipWalletConnection}
+      />
+    );
+  }
   return (
     <Layout>
       <Routes>

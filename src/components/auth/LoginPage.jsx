@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { GoogleLogin } from 'react-google-login';
 import { Bot, Mail, Lock, Eye, EyeOff, Chrome } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -12,9 +11,6 @@ export const LoginPage = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // Google OAuth Client ID (실제 프로젝트에서는 환경변수로 관리)
-  const GOOGLE_CLIENT_ID = "your-google-client-id.apps.googleusercontent.com";
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -54,33 +50,29 @@ export const LoginPage = () => {
     }
   };
 
-  const handleGoogleSuccess = async (response) => {
+  const handleGoogleLogin = async () => {
     setLoading(true);
     setError('');
 
     try {
-      const { profileObj, tokenId } = response;
-      
+      // 실제 환경에서는 Google OAuth를 구현하세요
+      // 현재는 데모용 Google 로그인 시뮬레이션
       const userData = {
-        id: profileObj.googleId,
-        name: profileObj.name,
-        email: profileObj.email,
-        avatar: profileObj.imageUrl,
+        id: 'google_demo_user',
+        name: 'Google 사용자',
+        email: 'google.user@gmail.com',
+        avatar: null,
         provider: 'google',
         wallet: { connected: false, address: null, network: null }
       };
 
-      await login(userData, tokenId);
+      const token = 'google_demo_token_' + Date.now();
+      await login(userData, token);
     } catch (err) {
       setError('Google 로그인에 실패했습니다.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleGoogleFailure = (error) => {
-    console.error('Google login failed:', error);
-    setError('Google 로그인에 실패했습니다.');
   };
 
   return (
@@ -108,22 +100,14 @@ export const LoginPage = () => {
 
           {/* Google Login */}
           <div className="mb-6">
-            <GoogleLogin
-              clientId={GOOGLE_CLIENT_ID}
-              render={renderProps => (
-                <button
-                  onClick={renderProps.onClick}
-                  disabled={renderProps.disabled || loading}
-                  className="w-full flex items-center justify-center space-x-3 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Chrome className="h-5 w-5 text-gray-600" />
-                  <span className="text-gray-700 font-medium">Google로 계속하기</span>
-                </button>
-              )}
-              onSuccess={handleGoogleSuccess}
-              onFailure={handleGoogleFailure}
-              cookiePolicy={'single_host_origin'}
-            />
+            <button
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="w-full flex items-center justify-center space-x-3 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Chrome className="h-5 w-5 text-gray-600" />
+              <span className="text-gray-700 font-medium">Google로 계속하기</span>
+            </button>
           </div>
 
           {/* Divider */}
@@ -191,11 +175,14 @@ export const LoginPage = () => {
           </form>
 
           {/* Demo Account Info */}
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
             <h4 className="text-sm font-medium text-blue-800 mb-2">데모 계정</h4>
             <div className="text-sm text-blue-700 space-y-1">
-              <p>이메일: demo@modelhub.ai</p>
-              <p>비밀번호: demo123</p>
+              <p><strong>이메일 로그인:</strong></p>
+              <p>• 이메일: demo@modelhub.ai</p>
+              <p>• 비밀번호: demo123</p>
+              <p className="pt-2"><strong>Google 로그인:</strong></p>
+              <p>• 위의 Google 버튼을 클릭하면 데모 계정으로 로그인됩니다</p>
             </div>
           </div>
 

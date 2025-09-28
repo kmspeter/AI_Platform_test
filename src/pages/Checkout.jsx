@@ -70,28 +70,39 @@ export const Checkout = () => {
       console.log('Requesting transaction signature...');
       const signedTransaction = await phantomWallet.signTransaction(paymentData);
       
-      // 3. 백엔드로 서명된 트랜잭션 전송 (임시 엔드포인트)
-      console.log('Sending signed transaction to backend...');
-      const response = await fetch('/api/payments/process', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          signature: signedTransaction.signature,
-          publicKey: signedTransaction.publicKey,
-          transactionData: signedTransaction.transactionData,
-          message: signedTransaction.message
-        })
-      });
-
-      // 4. 백엔드 응답 처리 (성공했다고 가정)
+      console.log('✅ Transaction signed successfully!');
+      
+      // 3. 백엔드로 전송될 데이터 출력
+      const backendPayload = {
+        signature: signedTransaction.signature,
+        publicKey: signedTransaction.publicKey,
+        transactionData: signedTransaction.transactionData,
+        message: signedTransaction.message,
+        metadata: {
+          modelId: id,
+          plan: plan,
+          amount: modelInfo.price + 2.5,
+          timestamp: paymentData.timestamp
+        }
+      };
+      
+      console.log('📤 Data to be sent to backend:');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log(JSON.stringify(backendPayload, null, 2));
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      
+      // 백엔드 구현 전 - 임시로 성공 응답 시뮬레이션
+      console.log('⏳ Simulating backend processing (2 seconds)...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       const result = {
         success: true,
         transactionHash: '0x' + Math.random().toString(16).substr(2, 64),
         accessPassId: 'pass_' + Math.random().toString(36).substr(2, 9),
         message: '결제가 성공적으로 처리되었습니다.'
       };
+
+      console.log('✅ Backend response (simulated):', result);
 
       setTransactionResult(result);
       setPaymentSuccess(true);
@@ -102,7 +113,7 @@ export const Checkout = () => {
       }, 3000);
 
     } catch (error) {
-      console.error('Payment error:', error);
+      console.error('❌ Payment error:', error);
       setPaymentError(error.message || '결제 처리 중 오류가 발생했습니다.');
     } finally {
       setPaymentLoading(false);

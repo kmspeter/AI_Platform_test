@@ -1,34 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, Mail, Lock, Eye, EyeOff, Chrome } from 'lucide-react';
+import { Bot, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const REDIRECT_URI = window.location.origin;
+const SERVER_URL = 'https://kau-capstone.duckdns.org/';
 
 export const LoginPage = () => {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // URL에서 인증 코드 처리
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    const state = urlParams.get('state');
-    const error = urlParams.get('error');
-
-    if (error) {
-      setError(`Google 로그인 오류: ${error}`);
-      // URL에서 오류 파라미터 제거
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (code && state === 'google_oauth') {
-      handleOAuthCallback(code);
-      // URL에서 코드 파라미터 제거
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, []);
 
   const handleInputChange = e => {
     const { name, value } = e.target;
@@ -54,81 +37,89 @@ export const LoginPage = () => {
     }
   };
 
-  // OAuth2 방식 Google 로그인
+  // Google OAuth 로그인 - 팝업 방식
   const handleGoogleLogin = () => {
-    if (!GOOGLE_CLIENT_ID) {
-      setError('Google Client ID가 설정되지 않았습니다.');
-      return;
-    }
-
-    const params = new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: REDIRECT_URI,
-      response_type: 'code',
-      scope: 'openid email profile',
-      state: 'google_oauth',
-      access_type: 'offline',
-      prompt: 'select_account'
-    });
-
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-    window.location.href = authUrl;
-  };
-
-  // OAuth 콜백 처리
-  const handleOAuthCallback = async (code) => {
     setLoading(true);
     setError('');
+    
+    const loginUrl = `${SERVER_URL}/oauth2/authorization/google`;
+    
+    // 팝업 창 설정
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    
+    const popup = window.open(
+      loginUrl,
+      'Google Login',
+      `width=${width},height=${height},left=${left},top=${top}`
+    );
 
-    try {
-      // 프론트엔드에서 직접 토큰 교환 (보안상 권장하지 않음, 데모용)
-      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          client_id: GOOGLE_CLIENT_ID,
-          client_secret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET, // 실제로는 백엔드에서 처리해야 함
-          code: code,
-          grant_type: 'authorization_code',
-          redirect_uri: REDIRECT_URI,
-        }),
-      });
+    // 팝업 모니터링 - 주기적으로 팝업의 URL 확인
+    const checkPopup = setInterval(async () => {
+      try {
+        if (!popup || popup.closed) {
+          clearInterval(checkPopup);
+          setLoading(false);
+          return;
+        }
 
-      if (!tokenResponse.ok) {
-        throw new Error('토큰 교환 실패');
+        // 팝업의 URL 확인 시도
+        try {
+          const popupUrl = popup.location.href;
+          
+          // 백엔드 서버의 응답 페이지인지 확인
+          if (popupUrl && popupUrl.includes(SERVER_URL)) {
+            // 팝업에서 HTML 내용 가져오기
+            const popupDoc = popup.document;
+            const bodyText = popupDoc.body.innerText || popupDoc.body.textContent;
+            
+            // JSON 데이터 파싱 시도
+            try {
+              const jsonMatch = bodyText.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                const authData = JSON.parse(jsonMatch[0]);
+                
+                if (authData.accessToken && authData.user) {
+                  // 로그인 처리
+                  await login(authData.user, authData.accessToken);
+                  
+                  // 팝업 닫기
+                  popup.close();
+                  clearInterval(checkPopup);
+                  setLoading(false);
+                  
+                  // 홈으로 이동
+                  navigate('/');
+                } else {
+                  throw new Error('Invalid auth data');
+                }
+              }
+            } catch (parseError) {
+              console.error('JSON parse error:', parseError);
+            }
+          }
+        } catch (e) {
+          // CORS 에러는 무시 (다른 도메인에 있을 때)
+          if (e.name !== 'SecurityError') {
+            console.error('Popup check error:', e);
+          }
+        }
+      } catch (error) {
+        console.error('Check popup error:', error);
       }
+    }, 500);
 
-      const tokenData = await tokenResponse.json();
-      const { access_token, id_token } = tokenData;
-
-      // 사용자 정보 가져오기
-      const userResponse = await fetch(
-        `https://www.googleapis.com/oauth2/v2/userinfo?access_token=${access_token}`
-      );
-
-      if (!userResponse.ok) {
-        throw new Error('사용자 정보 가져오기 실패');
+    // 타임아웃 설정 (30초)
+    setTimeout(() => {
+      if (popup && !popup.closed) {
+        popup.close();
       }
-
-      const userData = await userResponse.json();
-
-      const user = {
-        id: userData.id,
-        email: userData.email,
-        name: userData.name || userData.email,
-        picture: userData.picture,
-        provider: 'google',
-      };
-
-      await login(user, id_token || access_token);
-    } catch (err) {
-      console.error('OAuth callback error:', err);
-      setError(`Google 로그인 처리 중 오류: ${err.message}`);
-    } finally {
+      clearInterval(checkPopup);
       setLoading(false);
-    }
+      setError('로그인 시간이 초과되었습니다.');
+    }, 30000);
   };
 
   return (
@@ -157,6 +148,7 @@ export const LoginPage = () => {
           {loading && (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-blue-700 text-sm">Google 로그인 처리 중...</p>
+              <p className="text-blue-600 text-xs mt-1">팝업에서 로그인을 완료해주세요</p>
             </div>
           )}
 
@@ -164,19 +156,31 @@ export const LoginPage = () => {
           <div className="mb-6">
             <button
               onClick={handleGoogleLogin}
-              disabled={loading || !GOOGLE_CLIENT_ID}
-              className="w-full flex items-center justify-center space-x-3 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loading}
+              className="w-full flex items-center justify-center space-x-3 px-4 py-3 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Chrome className="h-5 w-5 text-gray-600" />
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                />
+              </svg>
               <span className="text-gray-700 font-medium">
                 {loading ? '처리 중...' : 'Google로 계속하기'}
               </span>
             </button>
-            {!GOOGLE_CLIENT_ID && (
-              <p className="mt-2 text-xs text-red-600">
-                VITE_GOOGLE_CLIENT_ID 환경변수가 설정되지 않았습니다.
-              </p>
-            )}
           </div>
 
           {/* 구분선 */}
@@ -243,14 +247,12 @@ export const LoginPage = () => {
           </form>
         </div>
 
-        {/* 환경 변수 안내 */}
+        {/* 개발 환경 정보 */}
         {process.env.NODE_ENV === 'development' && (
           <div className="mt-4 p-3 bg-gray-100 rounded-lg text-xs text-gray-600">
-            <p><strong>필요한 환경변수:</strong></p>
-            <p>VITE_GOOGLE_CLIENT_ID: {GOOGLE_CLIENT_ID ? '✓' : '✗'}</p>
-            <p>VITE_GOOGLE_CLIENT_SECRET: {import.meta.env.VITE_GOOGLE_CLIENT_SECRET ? '✓' : '✗'}</p>
-            <p className="mt-2 text-yellow-600">
-              ⚠️ 실제 앱에서는 client_secret을 백엔드에서 처리해야 합니다.
+            <p><strong>백엔드 서버:</strong> {SERVER_URL}</p>
+            <p className="mt-2 text-blue-600">
+              ℹ️ 팝업에서 JSON 응답을 자동으로 감지합니다.
             </p>
           </div>
         )}

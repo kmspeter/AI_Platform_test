@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Search, Bell, ChevronDown, User, Wallet, Wifi } from 'lucide-react';
+import { Search, Bell, ChevronDown, User, Wallet, Wifi, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { phantomWallet } from '../../utils/phantomWallet';
+import { SearchOverlay } from '../search/SearchOverlay';
 
 export const Header = ({ onWalletConnect }) => {
   const { user, updateUser, logout } = useAuth();
   const [searchValue, setSearchValue] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showStatusDetail, setShowStatusDetail] = useState(false);
@@ -86,10 +88,32 @@ export const Header = ({ onWalletConnect }) => {
               <input
                 type="text"
                 value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
+                onChange={(e) => {
+                  setSearchValue(e.target.value);
+                  if (e.target.value.trim()) {
+                    setShowSearch(true);
+                  }
+                }}
+                onFocus={() => {
+                  if (searchValue.trim()) {
+                    setShowSearch(true);
+                  }
+                }}
                 className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder="모델 검색 (자연어·태그 혼합)"
               />
+              
+              {/* Search Overlay */}
+              {showSearch && (
+                <SearchOverlay
+                  query={searchValue}
+                  onClose={() => setShowSearch(false)}
+                  onSelect={(item) => {
+                    setSearchValue('');
+                    setShowSearch(false);
+                  }}
+                />
+              )}
             </div>
           </div>
 
@@ -221,6 +245,14 @@ export const Header = ({ onWalletConnect }) => {
           </div>
         </div>
       </div>
+      
+      {/* Search Overlay Background */}
+      {showSearch && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-25 z-40"
+          onClick={() => setShowSearch(false)}
+        />
+      )}
     </header>
   );
 };

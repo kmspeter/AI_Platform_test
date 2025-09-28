@@ -15,6 +15,8 @@ import { Billing } from './pages/Billing';
 import { Personal } from './pages/Personal';
 import { Checkout } from './pages/Checkout';
 import { PurchaseComplete } from './pages/PurchaseComplete';
+import { Profile } from './pages/Profile';
+import { Settings } from './pages/Settings';
 
 const AppContent = () => {
   const { isAuthenticated, loading, needsWalletConnection, skipWalletConnection, updateUser } = useAuth();
@@ -60,8 +62,8 @@ const AppContent = () => {
         <Route path="/personal" element={<Personal />} />
         <Route path="/checkout/:id" element={<Checkout />} />
         <Route path="/purchase/:txId" element={<PurchaseComplete />} />
-        <Route path="/profile" element={<div className="p-6"><h1 className="text-2xl font-bold">프로필</h1><p>개발 중입니다</p></div>} />
-        <Route path="/settings" element={<div className="p-6"><h1 className="text-2xl font-bold">설정</h1><p>개발 중입니다</p></div>} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="/notifications" element={<div className="p-6"><h1 className="text-2xl font-bold">알림</h1><p>개발 중입니다</p></div>} />
       </Routes>
     </Layout>

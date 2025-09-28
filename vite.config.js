@@ -10,7 +10,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://3.34.137.42:8080',
+        target: 'https://kau-capstone.duckdns.org/',
         changeOrigin: true,
         // 필요하면:
         // rewrite: (path) => path.replace(/^\/api/, '/api'),

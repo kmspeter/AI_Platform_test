@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, Bell, ChevronDown, User, Wallet, Wifi } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { phantomWallet } from '../../utils/phantomWallet';
 
 export const Header = ({ onWalletConnect }) => {
   const { user, updateUser, logout } = useAuth();
@@ -17,14 +18,14 @@ export const Header = ({ onWalletConnect }) => {
   ];
 
   const connectPhantomWallet = async () => {
-    if (!window.solana || !window.solana.isPhantom) {
+    if (!phantomWallet.isPhantomInstalled()) {
       alert('팬텀 지갑이 설치되지 않았습니다. https://phantom.app/ 에서 설치해주세요.');
       return;
     }
 
     try {
-      const response = await window.solana.connect();
-      const address = response.publicKey.toString();
+      const connection = await phantomWallet.connect();
+      const address = connection.publicKey;
       
       updateUser({
         wallet: {
@@ -47,6 +48,7 @@ export const Header = ({ onWalletConnect }) => {
   const handleWalletConnect = () => {
     if (user?.wallet?.connected) {
       // 지갑 연결 해제
+      phantomWallet.disconnect();
       updateUser({
         wallet: {
           connected: false,

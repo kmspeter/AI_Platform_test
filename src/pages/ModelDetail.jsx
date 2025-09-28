@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { cachedFetch } from '../utils/apiCache';
 import { 
   Star, 
   Download, 
@@ -19,21 +20,17 @@ import {
 
 // API 서비스
 const modelDetailService = {
-  async fetchModel(id) {
+  async fetchModel(id, forceRefresh = false) {
     try {
-      const response = await fetch(`/api/models/${id}`, {
+      const data = await cachedFetch(`/api/models/${id}`, {
         method: 'GET',
         headers: {
           'accept': '*/*',
           'Content-Type': 'application/json',
         },
-      });
+        forceRefresh
+      }, 10 * 60 * 1000); // 10분 캐시 (상세 정보는 더 오래 캐시)
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
       console.log('Model detail API response:', data);
       
       return this.transformModel(data);
@@ -172,6 +169,23 @@ export const ModelDetail = () => {
   const [showProvenance, setShowProvenance] = useState(false);
   const [copiedHash, setCopiedHash] = useState('');
 
+  // 새로고침 함수
+  const refreshModel = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const modelData = await modelDetailService.fetchModel(id, true); // 강제 새로고침
+      console.log('Refreshed model detail:', modelData);
+      setModel(modelData);
+    } catch (err) {
+      console.error('Error refreshing model detail:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // API에서 모델 상세 정보 로드
   useEffect(() => {
     let isCancelled = false;
@@ -286,7 +300,8 @@ export const ModelDetail = () => {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{model.name}</h1>
               <p className="text-lg text-gray-600">by {model.creator}</p>
-              <div className="flex items-center space-x-4 mt-1">
+              <div className="flex items-center justify-between mt-1">
+                <div className="flex items-center space-x-4">
                 <span className="text-sm text-gray-500">v{model.versionName}</span>
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                   model.status === 'PUBLISHED' 
@@ -295,6 +310,14 @@ export const ModelDetail = () => {
                 }`}>
                   {model.status}
                 </span>
+                </div>
+                <button
+                  onClick={refreshModel}
+                  disabled={loading}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+                >
+                  새로고침
+                </button>
               </div>
             </div>
           </div>

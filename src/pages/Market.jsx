@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ShoppingBag, AlertCircle, Loader2 } from 'lucide-react';
+import { cachedFetch, apiCache } from '../utils/apiCache';
 import { FilterBar } from '../components/market/FilterBar';
 import { ModelCard } from '../components/market/ModelCard';
 import { ComparisonBar } from '../components/market/ComparisonBar';
@@ -9,32 +10,17 @@ import { ComparisonOverlay } from '../components/market/ComparisonOverlay';
 const apiService = {
   baseURL: '',
   
-  async fetchModels() {
+  async fetchModels(forceRefresh = false) {
     try {
       const apiUrl = `/api/models`;
       console.log('API 요청 URL:', apiUrl);
             
-      const response = await fetch(apiUrl, {
+      const data = await cachedFetch(apiUrl, {
         method: 'GET',
-        // 단순 요청으로 유지: 헤더를 빼거나, 필요하면 아래 1줄만
         headers: { 'Accept': 'application/json' },
-        // mode: 'cors' // (기본값이 cors라 생략 가능)
-      });
+        forceRefresh
+      }, 5 * 60 * 1000); // 5분 캐시
       
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      // Content-Type 확인
-      const contentType = response.headers.get('content-type');
-      console.log('Content-Type:', contentType);
-      
-      const data = await response.json();
       console.log('API Response:', data);
       
       if (!Array.isArray(data)) {
@@ -155,6 +141,22 @@ export const Market = () => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [comparison, setComparison] = useState([]);
   const [showComparison, setShowComparison] = useState(false);
+
+  // 새로고침 함수
+  const refreshModels = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const fetchedModels = await apiService.fetchModels(true); // 강제 새로고침
+      console.log('Refreshed models:', fetchedModels);
+      setModels(fetchedModels);
+    } catch (err) {
+      console.error('Error refreshing models:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // API에서 모델 데이터 로드
   useEffect(() => {
@@ -368,7 +370,16 @@ export const Market = () => {
         <div className="flex-1 p-6">
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-gray-900">AI 모델 마켓</h1>
-            <p className="text-gray-600 mt-1">{filteredModels.length}개의 모델이 있습니다</p>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-gray-600">{filteredModels.length}개의 모델이 있습니다</p>
+              <button
+                onClick={refreshModels}
+                disabled={loading}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+              >
+                새로고침
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-20">

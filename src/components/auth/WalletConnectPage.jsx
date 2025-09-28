@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Wallet, CheckCircle, AlertCircle, ArrowRight, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { phantomWallet } from '../../utils/phantomWallet';
 
 export const WalletConnectPage = ({ onComplete, onSkip }) => {
   const { user, updateUser } = useAuth();
@@ -33,7 +34,7 @@ export const WalletConnectPage = ({ onComplete, onSkip }) => {
   }, []);
 
   const connectPhantomWallet = async () => {
-    if (!phantomInstalled) {
+    if (!phantomWallet.isPhantomInstalled()) {
       setError('팬텀 지갑이 설치되지 않았습니다.');
       return;
     }
@@ -42,22 +43,8 @@ export const WalletConnectPage = ({ onComplete, onSkip }) => {
     setError('');
 
     try {
-      // Phantom이 이미 연결되어 있는지 확인
-      if (window.solana.isConnected) {
-        await window.solana.disconnect();
-      }
-
-      // 연결 시도 전에 잠시 대기
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // onlyIfTrusted: false로 설정하여 사용자 승인을 명시적으로 요청
-      const response = await window.solana.connect({ onlyIfTrusted: false });
-      
-      if (!response || !response.publicKey) {
-        throw new Error('지갑 연결 응답이 올바르지 않습니다.');
-      }
-
-      const address = response.publicKey.toString();
+      const connection = await phantomWallet.connect();
+      const address = connection.publicKey;
       
       setWalletAddress(address);
       
@@ -103,10 +90,7 @@ export const WalletConnectPage = ({ onComplete, onSkip }) => {
   // Phantom 지갑 상태 재확인
   const recheckPhantom = () => {
     setTimeout(() => {
-      const isPhantomInstalled = typeof window !== 'undefined' && 
-        window.solana && 
-        window.solana.isPhantom &&
-        window.solana.connect;
+      const isPhantomInstalled = phantomWallet.isPhantomInstalled();
       setPhantomInstalled(isPhantomInstalled);
       
       if (!isPhantomInstalled) {

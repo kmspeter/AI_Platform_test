@@ -22,16 +22,19 @@ import {
 const modelDetailService = {
   async fetchModel(id, forceRefresh = false) {
     try {
-      const data = await cachedFetch(`/api/models/${id}`, {
+      // 쿼리 파라미터 방식으로 변경
+      const apiUrl = `/api/models?id=${id}`;
+      
+      console.log('Model detail API 요청 URL:', apiUrl);
+      
+      const data = await cachedFetch(apiUrl, {
         method: 'GET',
         headers: {
           'accept': '*/*',
           'Content-Type': 'application/json',
         },
         forceRefresh
-      }, 10 * 60 * 1000); // 10분 캐시 (상세 정보는 더 오래 캐시)
-      
-      console.log('Model detail API response:', data);
+      }, 10 * 60 * 1000);
       
       return this.transformModel(data);
     } catch (error) {

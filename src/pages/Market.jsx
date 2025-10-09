@@ -1,6 +1,47 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ShoppingBag, AlertCircle, Loader2 } from 'lucide-react';
 import { cachedFetch, apiCache } from '../utils/apiCache';
+import { API_BASE_URL, resolveApiUrl } from '../config/api';
+import {
+  extractPricingPlans,
+  MODEL_DEFAULT_THUMBNAIL,
+  normalizeLicense,
+  normalizeMetrics,
+  normalizeModality,
+  prepareMetricDisplay,
+  selectDefaultPlan,
+} from '../utils/modelTransformers';
+
+const extractModelList = (data) => {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (data && typeof data === 'object') {
+    if (Array.isArray(data.response)) {
+      return data.response;
+    }
+
+    if (data.response && typeof data.response === 'object') {
+      return [data.response];
+    }
+
+    const nestedWithResponse = Object.values(data).find(
+      (value) => value && typeof value === 'object' && Array.isArray(value.response)
+    );
+
+    if (nestedWithResponse) {
+      return nestedWithResponse.response;
+    }
+
+    const firstArray = Object.values(data).find((value) => Array.isArray(value));
+    if (firstArray) {
+      return firstArray;
+    }
+  }
+
+  return [];
+};
 import { FilterBar } from '../components/market/FilterBar';
 import { ModelCard } from '../components/market/ModelCard';
 import { ComparisonBar } from '../components/market/ComparisonBar';
@@ -9,15 +50,13 @@ import { ComparisonOverlay } from '../components/market/ComparisonOverlay';
 // API 서비스 함수
 const apiService = {
   // 환경변수 기반 baseURL 설정
-  baseURL: '',
-  
+  baseURL: API_BASE_URL,
+
   async fetchModels(forceRefresh = false) {
     try {
       // 환경에 따른 API URL 생성
-      const apiUrl = import.meta.env.NODE_ENV === 'development' 
-        ? `/api/models`  // 개발환경: 프록시 사용
-        : `${this.baseURL}/api/models`;  // 프로덕션: 직접 호출
-      
+      const apiUrl = resolveApiUrl('/api/models');
+
       console.log('Environment:', import.meta.env.NODE_ENV);
       console.log('Base URL:', this.baseURL);
       console.log('API 요청 URL:', apiUrl);
@@ -33,11 +72,13 @@ const apiService = {
       
       console.log('API Response:', data);
       
-      if (!Array.isArray(data)) {
-        throw new Error('서버 응답이 배열 형태가 아닙니다.');
+      const models = extractModelList(data);
+
+      if (!Array.isArray(models) || models.length === 0) {
+        throw new Error('서버 응답에서 모델 데이터를 찾을 수 없습니다.');
       }
-      
-      return data.map(model => this.transformModel(model));
+
+      return models.map(model => this.transformModel(model));
     } catch (error) {
       console.error('Failed to fetch models:', error);
       
@@ -55,63 +96,40 @@ const apiService = {
       console.log('Transforming model:', apiModel);
       
       // API 응답을 프론트엔드 형식으로 변환
-      let transformedMetrics = {};
-      
-      if (apiModel.metrics) {
-        if (typeof apiModel.metrics === 'object') {
-          // metrics가 객체인 경우 (일반적인 경우)
-          Object.keys(apiModel.metrics).forEach(key => {
-            if (key === 'raw') {
-              // raw 필드가 있는 경우 파싱 시도
-              try {
-                const rawMetrics = JSON.parse(apiModel.metrics.raw);
-                if (Array.isArray(rawMetrics)) {
-                  rawMetrics.forEach(metric => {
-                    if (metric && metric.code && metric.value !== undefined) {
-                      transformedMetrics[metric.code] = parseFloat(metric.value) || 0;
-                    }
-                  });
-                }
-              } catch (e) {
-                console.warn('Failed to parse raw metrics:', apiModel.metrics.raw, e);
-              }
-            } else {
-              // 일반 메트릭 필드
-              transformedMetrics[key] = parseFloat(apiModel.metrics[key]) || 0;
-            }
-          });
-        } else if (typeof apiModel.metrics === 'string') {
-          // metrics가 문자열인 경우
-          try {
-            const parsedMetrics = JSON.parse(apiModel.metrics);
-            if (Array.isArray(parsedMetrics)) {
-              parsedMetrics.forEach(metric => {
-                if (metric && metric.code && metric.value !== undefined) {
-                  transformedMetrics[metric.code] = parseFloat(metric.value) || 0;
-                }
-              });
-            }
-          } catch (e) {
-            console.warn('Failed to parse metrics string:', apiModel.metrics, e);
-          }
-        }
-      }
-      
+      const metrics = normalizeMetrics(apiModel.metrics);
+      const licenseInfo = normalizeLicense(apiModel.license);
+      const pricingPlans = extractPricingPlans(apiModel.pricing);
+      const defaultPlan = selectDefaultPlan(pricingPlans);
+      const normalizedModality = normalizeModality(apiModel.modality);
+      const metricDisplay = prepareMetricDisplay(metrics, normalizedModality);
+      const metricHighlights = metricDisplay.slice(0, 2);
+
       const transformed = {
         id: apiModel.id?.toString() || Math.random().toString(36).substr(2, 9),
         name: apiModel.name || 'Unknown Model',
         creator: apiModel.uploader || 'Unknown Creator',
-        modality: apiModel.modality || 'text',
-        license: apiModel.license || 'unknown',
+        modality: normalizedModality,
+        rawModality: apiModel.modality || '',
+        license: licenseInfo.primary,
         pricing: {
-          type: apiModel.priceStandard > 0 ? 'paid' : 'free',
-          amount: parseFloat(apiModel.priceStandard) || 0,
-          currency: apiModel.currency || 'USDC'
+          type: defaultPlan.price > 0 ? 'paid' : 'free',
+          amount: defaultPlan.price,
+          currency: 'SOL',
+          billingType: defaultPlan.billingType,
+          planId: defaultPlan.id,
+          planName: defaultPlan.name
         },
-        metrics: transformedMetrics,
+        pricingPlans,
+        metrics,
+        metricDisplay,
+        metricHighlights,
+        version: apiModel.versionName || '1.0.0',
+        versionName: apiModel.versionName || '1.0.0',
+        releaseDate: apiModel.releaseDate || null,
+        thumbnail: apiModel.thumbnail || MODEL_DEFAULT_THUMBNAIL,
         downloads: Math.floor(Math.random() * 10000), // API에 없는 데이터는 임시값
-        tags: [], // API에 없는 데이터는 빈 배열
-        description: `${apiModel.name || 'Unknown Model'} - ${apiModel.modality || 'AI'} 모델입니다.`,
+        tags: licenseInfo.labels.length > 0 ? licenseInfo.labels : ['라이선스 정보 없음'],
+        description: apiModel.overview || `${apiModel.name || 'Unknown Model'} - ${normalizedModality} 모델입니다.`,
       };
       
       console.log('Transformed model:', transformed);
@@ -126,7 +144,7 @@ const apiService = {
         creator: 'Unknown',
         modality: 'text',
         license: 'unknown',
-        pricing: { type: 'free', amount: 0, currency: 'USDC' },
+        pricing: { type: 'free', amount: 0, currency: 'SOL' },
         metrics: {},
         downloads: 0,
         tags: [],

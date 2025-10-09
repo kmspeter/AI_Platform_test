@@ -1,12 +1,8 @@
 {
   "rewrites": [
-    { 
-      "source": "/api/models/:path*", 
-      "destination": "/api/models/:path*"
-    },
-    { 
-      "source": "/api/storage/:path*", 
-      "destination": "http://13.125.63.0:3001/:path*" 
+    {
+      "source": "/ipfs/:path*",
+      "destination": "http://52.79.235.41:3001/ipfs/:path*"
     },
     {
       "source": "/(.*)",

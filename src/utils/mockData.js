@@ -194,7 +194,7 @@ export const mockAuditEvents = [
   }
 ];
 
-export const generateBillingData = (period) => {
+export const generateBillingData = (period, modelFilter = 'all') => {
   const periods = {
     '7d': { days: 7, multiplier: 1 },
     '30d': { days: 30, multiplier: 1.5 },
@@ -202,11 +202,20 @@ export const generateBillingData = (period) => {
     '1y': { days: 365, multiplier: 3.5 }
   };
 
+  const modelMultipliers = {
+    'all': { tokens: 1600000, cost: 564, latency: 1.5, error: 0.5 },
+    'gpt-4-turbo': { tokens: 800000, cost: 320, latency: 1.2, error: 0.3 },
+    'claude-3-opus': { tokens: 450000, cost: 168, latency: 1.4, error: 0.4 },
+    'dall-e-3': { tokens: 200000, cost: 125, latency: 2.1, error: 0.6 },
+    'llama-2': { tokens: 150000, cost: 0, latency: 0.9, error: 0.2 }
+  };
+
   const config = periods[period] || periods['30d'];
-  const baseTokens = 1600000;
-  const baseCost = 564;
-  const baseLatency = 1.5;
-  const baseErrorRate = 0.5;
+  const modelConfig = modelMultipliers[modelFilter] || modelMultipliers['all'];
+  const baseTokens = modelConfig.tokens;
+  const baseCost = modelConfig.cost;
+  const baseLatency = modelConfig.latency;
+  const baseErrorRate = modelConfig.error;
 
   return {
     kpiData: [
@@ -239,14 +248,21 @@ export const generateBillingData = (period) => {
         color: 'text-red-600'
       }
     ],
-    chartData: generateChartData(config.days, config.multiplier),
+    chartData: generateChartData(config.days, config.multiplier, modelFilter),
     invoices: generateInvoices(period, config.multiplier)
   };
 };
 
-const generateChartData = (days, multiplier) => {
+const generateChartData = (days, multiplier, modelFilter = 'all') => {
   const data = [];
-  const baseValue = 50000 * multiplier;
+  const modelBaseValues = {
+    'all': 50000,
+    'gpt-4-turbo': 30000,
+    'claude-3-opus': 18000,
+    'dall-e-3': 8000,
+    'llama-2': 6000
+  };
+  const baseValue = (modelBaseValues[modelFilter] || modelBaseValues['all']) * multiplier;
   const now = new Date();
 
   for (let i = days - 1; i >= 0; i--) {

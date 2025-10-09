@@ -8,7 +8,7 @@ import {
   ExternalLink,
   Settings
 } from 'lucide-react';
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { generateBillingData } from '../utils/mockData';
 
 export const Billing = () => {
@@ -16,8 +16,10 @@ export const Billing = () => {
   const [showBudgetDrawer, setShowBudgetDrawer] = useState(false);
   const [budget, setBudget] = useState(1000);
   const [chartView, setChartView] = useState('tokens');
+  const [modelFilter, setModelFilter] = useState('all');
+  const [chartType, setChartType] = useState('area');
 
-  const billingData = useMemo(() => generateBillingData(selectedPeriod), [selectedPeriod]);
+  const billingData = useMemo(() => generateBillingData(selectedPeriod, modelFilter), [selectedPeriod, modelFilter]);
   const { kpiData, chartData, invoices } = billingData;
 
   const iconMap = {
@@ -97,11 +99,33 @@ export const Billing = () => {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-gray-900">사용량 추이</h2>
             <div className="flex space-x-2">
-              <select className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
-                <option>모든 모델</option>
-                <option>GPT-4 Turbo</option>
-                <option>Claude 3 Opus</option>
+              <select
+                value={modelFilter}
+                onChange={(e) => setModelFilter(e.target.value)}
+                className="rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              >
+                <option value="all">모든 모델</option>
+                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                <option value="claude-3-opus">Claude 3 Opus</option>
+                <option value="dall-e-3">DALL-E 3</option>
+                <option value="llama-2">Llama 2</option>
               </select>
+              <button
+                onClick={() => setChartType('area')}
+                className={`px-3 py-1 text-sm rounded transition-colors ${
+                  chartType === 'area' ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:text-gray-700'
+                }`}
+              >
+                영역
+              </button>
+              <button
+                onClick={() => setChartType('bar')}
+                className={`px-3 py-1 text-sm rounded transition-colors ${
+                  chartType === 'bar' ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:text-gray-700'
+                }`}
+              >
+                막대
+              </button>
               <button
                 onClick={() => setChartView('tokens')}
                 className={`px-3 py-1 text-sm rounded transition-colors ${
@@ -130,51 +154,91 @@ export const Billing = () => {
           </div>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis
-                  dataKey="date"
-                  stroke="#9CA3AF"
-                  style={{ fontSize: '12px' }}
-                  tickMargin={8}
-                />
-                <YAxis
-                  stroke="#9CA3AF"
-                  style={{ fontSize: '12px' }}
-                  tickFormatter={(value) => {
-                    if (chartView === 'tokens') return `${(value / 1000).toFixed(0)}K`;
-                    if (chartView === 'cost') return `$${value}`;
-                    return value;
-                  }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
-                    padding: '12px'
-                  }}
-                  formatter={(value) => {
-                    if (chartView === 'tokens') return [value.toLocaleString(), '토큰'];
-                    if (chartView === 'cost') return [`$${value.toFixed(2)}`, '비용'];
-                    return [value.toLocaleString(), '요청'];
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey={chartView}
-                  stroke="#3B82F6"
-                  strokeWidth={2}
-                  fill="url(#colorValue)"
-                  animationDuration={500}
-                />
-              </AreaChart>
+              {chartType === 'area' ? (
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <XAxis
+                    dataKey="date"
+                    stroke="#9CA3AF"
+                    style={{ fontSize: '12px' }}
+                    tickMargin={8}
+                  />
+                  <YAxis
+                    stroke="#9CA3AF"
+                    style={{ fontSize: '12px' }}
+                    tickFormatter={(value) => {
+                      if (chartView === 'tokens') return `${(value / 1000).toFixed(0)}K`;
+                      if (chartView === 'cost') return `$${value}`;
+                      return value;
+                    }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #E5E7EB',
+                      borderRadius: '8px',
+                      padding: '12px'
+                    }}
+                    formatter={(value) => {
+                      if (chartView === 'tokens') return [value.toLocaleString(), '토큰'];
+                      if (chartView === 'cost') return [`$${value.toFixed(2)}`, '비용'];
+                      return [value.toLocaleString(), '요청'];
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey={chartView}
+                    stroke="#3B82F6"
+                    strokeWidth={2}
+                    fill="url(#colorValue)"
+                    animationDuration={500}
+                  />
+                </AreaChart>
+              ) : (
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <XAxis
+                    dataKey="date"
+                    stroke="#9CA3AF"
+                    style={{ fontSize: '12px' }}
+                    tickMargin={8}
+                  />
+                  <YAxis
+                    stroke="#9CA3AF"
+                    style={{ fontSize: '12px' }}
+                    tickFormatter={(value) => {
+                      if (chartView === 'tokens') return `${(value / 1000).toFixed(0)}K`;
+                      if (chartView === 'cost') return `$${value}`;
+                      return value;
+                    }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #E5E7EB',
+                      borderRadius: '8px',
+                      padding: '12px'
+                    }}
+                    formatter={(value) => {
+                      if (chartView === 'tokens') return [value.toLocaleString(), '토큰'];
+                      if (chartView === 'cost') return [`$${value.toFixed(2)}`, '비용'];
+                      return [value.toLocaleString(), '요청'];
+                    }}
+                  />
+                  <Bar
+                    dataKey={chartView}
+                    fill="#3B82F6"
+                    radius={[4, 4, 0, 0]}
+                    animationDuration={500}
+                  />
+                </BarChart>
+              )}
             </ResponsiveContainer>
           </div>
         </div>

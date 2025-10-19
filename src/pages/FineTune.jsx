@@ -57,56 +57,48 @@ export const FineTune = () => {
 
   useEffect(() => {
     if (isTraining && !isCompleted) {
-      trainingIntervalRef.current = setInterval(() => {
-        setTrainingProgress(prev => {
-          const increment = 100 / (trainingConfig.steps / 2);
-          const newProgress = Math.min(prev + increment, 100);
-
-          if (newProgress >= 100) {
-            clearInterval(trainingIntervalRef.current);
-            clearInterval(logIntervalRef.current);
-            setIsTraining(false);
-            setIsCompleted(true);
-            addLog('훈련 완료!');
-            addLog('최종 손실: 0.234');
-            addLog('모델 저장 중...');
-            addLog('저장 완료!');
-            return 100;
-          }
-          return newProgress;
-        });
-      }, 100);
+      let currentStep = trainingStep;
 
       logIntervalRef.current = setInterval(() => {
-        setTrainingProgress(prev => {
-          const currentStepNum = Math.floor(trainingConfig.steps * (prev / 100));
-          setTrainingStep(currentStepNum);
+        currentStep++;
 
-          if (currentStepNum > 0 && currentStepNum < trainingConfig.steps) {
-            const baseLoss = 2.5;
-            const decay = 0.998;
-            const noise = (Math.random() - 0.5) * 0.05;
-            const loss = (baseLoss * Math.pow(decay, currentStepNum / 10) + noise).toFixed(4);
-            const lr = (0.0001 * Math.pow(0.95, currentStepNum / 100)).toExponential(2);
+        if (currentStep >= trainingConfig.steps) {
+          currentStep = trainingConfig.steps;
+          setTrainingStep(currentStep);
+          setTrainingProgress(100);
+          clearInterval(logIntervalRef.current);
+          setIsTraining(false);
+          setIsCompleted(true);
+          addLog('훈련 완료!');
+          addLog('최종 손실: 0.234');
+          addLog('모델 저장 중...');
+          addLog('저장 완료!');
+          return;
+        }
 
-            addLog(`Step ${currentStepNum}/${trainingConfig.steps} - loss: ${loss}, lr: ${lr}`);
+        const progress = (currentStep / trainingConfig.steps) * 100;
+        setTrainingStep(currentStep);
+        setTrainingProgress(progress);
 
-            setLossData(prevData => {
-              const newData = [...prevData, { step: currentStepNum, loss: parseFloat(loss) }];
-              return newData.slice(-50);
-            });
-          }
+        const baseLoss = 2.5;
+        const decay = 0.998;
+        const noise = (Math.random() - 0.5) * 0.05;
+        const loss = (baseLoss * Math.pow(decay, currentStep / 10) + noise).toFixed(4);
+        const lr = (0.0001 * Math.pow(0.95, currentStep / 100)).toExponential(2);
 
-          return prev;
+        addLog(`Step ${currentStep}/${trainingConfig.steps} - loss: ${loss}, lr: ${lr}`);
+
+        setLossData(prevData => {
+          const newData = [...prevData, { step: currentStep, loss: parseFloat(loss) }];
+          return newData.slice(-50);
         });
       }, 1000);
     }
 
     return () => {
-      if (trainingIntervalRef.current) clearInterval(trainingIntervalRef.current);
       if (logIntervalRef.current) clearInterval(logIntervalRef.current);
     };
-  }, [isTraining, isCompleted, trainingConfig.steps]);
+  }, [isTraining, isCompleted, trainingConfig.steps, trainingStep]);
 
   const addLog = (message) => {
     const timestamp = new Date().toLocaleTimeString('ko-KR');
@@ -500,6 +492,7 @@ export const FineTune = () => {
                               stroke="#3b82f6"
                               strokeWidth={2}
                               dot={false}
+                              isAnimationActive={false}
                             />
                           </LineChart>
                         </ResponsiveContainer>

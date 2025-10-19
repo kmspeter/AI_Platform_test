@@ -59,7 +59,7 @@ export const FineTune = () => {
     if (isTraining && !isCompleted) {
       let currentStep = trainingStep;
       const totalSteps = trainingConfig.steps;
-      const incrementPerSecond = Math.ceil(totalSteps / 50);
+      const incrementPerSecond = Math.ceil(totalSteps / 10);
 
       logIntervalRef.current = setInterval(() => {
         const remainingSteps = totalSteps - currentStep;

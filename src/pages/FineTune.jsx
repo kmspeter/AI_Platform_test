@@ -58,17 +58,32 @@ export const FineTune = () => {
   useEffect(() => {
     if (isTraining && !isCompleted) {
       let currentStep = trainingStep;
+      const totalSteps = trainingConfig.steps;
+      const incrementPerSecond = Math.ceil(totalSteps / 50);
 
       logIntervalRef.current = setInterval(() => {
-        currentStep++;
+        const remainingSteps = totalSteps - currentStep;
 
-        if (currentStep >= trainingConfig.steps) {
-          currentStep = trainingConfig.steps;
+        if (remainingSteps <= incrementPerSecond) {
+          currentStep = totalSteps;
           setTrainingStep(currentStep);
           setTrainingProgress(100);
           clearInterval(logIntervalRef.current);
           setIsTraining(false);
           setIsCompleted(true);
+
+          const baseLoss = 2.5;
+          const decay = 0.998;
+          const noise = (Math.random() - 0.5) * 0.05;
+          const loss = (baseLoss * Math.pow(decay, currentStep / 10) + noise).toFixed(4);
+          const lr = (0.0001 * Math.pow(0.95, currentStep / 100)).toExponential(2);
+          addLog(`Step ${currentStep}/${totalSteps} - loss: ${loss}, lr: ${lr}`);
+
+          setLossData(prevData => {
+            const newData = [...prevData, { step: currentStep, loss: parseFloat(loss) }];
+            return newData.slice(-50);
+          });
+
           addLog('훈련 완료!');
           addLog('최종 손실: 0.234');
           addLog('모델 저장 중...');
@@ -76,7 +91,8 @@ export const FineTune = () => {
           return;
         }
 
-        const progress = (currentStep / trainingConfig.steps) * 100;
+        currentStep += incrementPerSecond;
+        const progress = (currentStep / totalSteps) * 100;
         setTrainingStep(currentStep);
         setTrainingProgress(progress);
 
@@ -86,7 +102,7 @@ export const FineTune = () => {
         const loss = (baseLoss * Math.pow(decay, currentStep / 10) + noise).toFixed(4);
         const lr = (0.0001 * Math.pow(0.95, currentStep / 100)).toExponential(2);
 
-        addLog(`Step ${currentStep}/${trainingConfig.steps} - loss: ${loss}, lr: ${lr}`);
+        addLog(`Step ${currentStep}/${totalSteps} - loss: ${loss}, lr: ${lr}`);
 
         setLossData(prevData => {
           const newData = [...prevData, { step: currentStep, loss: parseFloat(loss) }];

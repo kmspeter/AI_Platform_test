@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { cachedFetch } from '../utils/apiCache';
 import { resolveApiUrl } from '../config/api';
+import { convertSolToLamports, formatLamports } from '../utils/currency';
 import {
   extractPricingPlans,
   MODEL_DEFAULT_THUMBNAIL,
@@ -23,7 +24,8 @@ import {
   Shield,
   Bot,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  ArrowDown
 } from 'lucide-react';
 
 const extractModelResponse = (data) => {
@@ -163,7 +165,7 @@ const modelDetailService = {
         })
       : [];
 
-    const hasIntegrityInfo = Boolean(targetModel.cidRoot || targetModel.checksumRoot || targetModel.onchainTx);
+    const hasIntegrityInfo = Boolean(targetModel.cidRoot || targetModel.onchainTx);
 
     // API 응답을 컴포넌트에서 사용하는 형태로 변환
     return {
@@ -193,7 +195,6 @@ const modelDetailService = {
       compliance: targetModel.compliance || '',
       integrity: {
         cid: targetModel.cidRoot || '',
-        checksum: targetModel.checksumRoot || '',
         txHash: targetModel.onchainTx || '',
         verified: hasIntegrityInfo,
         storage: targetModel.storage || '제공되지 않음',
@@ -230,6 +231,37 @@ export const ModelDetail = () => {
   const [selectedPlan, setSelectedPlan] = useState('');
   const [showAllMetrics, setShowAllMetrics] = useState(false);
   const [copiedHash, setCopiedHash] = useState('');
+  const selectedPlanData = useMemo(() => {
+    if (!model?.pricing?.plans?.length) {
+      return null;
+    }
+
+    return model.pricing.plans.find(plan => plan.id === selectedPlan) || model.pricing.plans[0];
+  }, [model, selectedPlan]);
+  const checkoutPlanId = selectedPlanData?.id || selectedPlan || '';
+  const checkoutPlanQuery = checkoutPlanId || 'standard';
+  const checkoutState = useMemo(() => {
+    if (!model) {
+      return null;
+    }
+
+    const plans = Array.isArray(model.pricing?.plans) ? model.pricing.plans : [];
+
+    return {
+      model: {
+        id: model.id,
+        name: model.name,
+        creator: model.creator,
+        versionName: model.versionName,
+        thumbnail: model.thumbnail,
+        licenseTags: model.licenseTags,
+      },
+      pricingPlans: plans,
+      licenseTags: model.licenseTags,
+      selectedPlanId: checkoutPlanId || plans[0]?.id || '',
+      selectedPlan: selectedPlanData,
+    };
+  }, [model, selectedPlanData, checkoutPlanId]);
 
   const getSampleTypeLabel = (type) => {
     switch (type) {
@@ -379,6 +411,51 @@ export const ModelDetail = () => {
   const hasAdditionalMetrics = allMetrics.length > topMetrics.length;
   const releaseNotes = Array.isArray(model.releaseNotes) ? model.releaseNotes : [];
 
+  const lineageEntries = Array.isArray(model.lineage) ? model.lineage : [];
+  const lineageNodes = lineageEntries.reduce((acc, line, index) => {
+    const isObject = line && typeof line === 'object' && !Array.isArray(line);
+
+    if (!isObject) {
+      const label = typeof line === 'string' ? line : JSON.stringify(line);
+      if (label) {
+        acc.push({ type: 'node', label });
+      }
+      return acc;
+    }
+
+    const from = line.from || line.parent || line.parentName || line.source || '';
+    const to = line.to || line.child || line.childName || line.target || '';
+    const relationship = line.relationship || line.type || line.transition || '';
+
+    if (index === 0 && from) {
+      acc.push({ type: 'node', label: from });
+    }
+
+    if (index > 0 && from) {
+      const previous = acc[acc.length - 1];
+      if (!previous || previous.type !== 'node' || previous.label !== from) {
+        acc.push({ type: 'node', label: from });
+      }
+    }
+
+    const lastItem = acc[acc.length - 1];
+    const hasPreviousNode = lastItem && lastItem.type === 'node';
+    const shouldAddConnector = Boolean((relationship || to) && hasPreviousNode);
+
+    if (shouldAddConnector) {
+      acc.push({
+        type: 'connector',
+        label: relationship,
+      });
+    }
+
+    if (to) {
+      acc.push({ type: 'node', label: to });
+    }
+
+    return acc;
+  }, []);
+
   return (
     <div className="flex-1">
       {/* Page Header */}
@@ -423,7 +500,8 @@ export const ModelDetail = () => {
               <span>체험</span>
             </Link>
             <Link
-              to={`/checkout/${id}?plan=${selectedPlan}`}
+              to={`/checkout/${id}?plan=${checkoutPlanQuery}`}
+              state={checkoutState || undefined}
               className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <ShoppingCart className="h-4 w-4" />
@@ -618,7 +696,9 @@ export const ModelDetail = () => {
                       <div className="flex-1">
                         <div className="font-semibold text-gray-900">{plan.name}</div>
                         <div className="text-sm text-gray-600 mb-3">
-                          {plan.price === 0 ? '무료' : `${plan.price} SOL`}
+                          {Number(plan.price) === 0
+                            ? '무료'
+                            : formatLamports(convertSolToLamports(plan.price))}
                         </div>
                         {plan.billingType && (
                           <div className="text-xs text-gray-500 mb-2">과금 방식: {formatBillingType(plan.billingType)}</div>
@@ -653,12 +733,17 @@ export const ModelDetail = () => {
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <div className="text-sm text-gray-600 mb-2">예상 비용</div>
                   <div className="text-2xl font-bold text-gray-900">
-                    {model.pricing.plans.find(p => p.id === selectedPlan)?.price || 0} SOL
+                    {formatLamports(
+                      convertSolToLamports(
+                        model.pricing.plans.find(p => p.id === selectedPlan)?.price || 0
+                      )
+                    )}
                   </div>
                 </div>
 
                 <Link
-                  to={`/checkout/${id}?plan=${selectedPlan}`}
+                  to={`/checkout/${id}?plan=${checkoutPlanQuery}`}
+                  state={checkoutState || undefined}
                   className="w-full mt-6 bg-blue-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors text-center block shadow-sm"
                 >
                   구매로 이동
@@ -749,19 +834,81 @@ export const ModelDetail = () => {
           <h2 className="text-2xl font-semibold text-gray-900 mb-6">계보</h2>
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             {model.lineage && model.lineage.length > 0 ? (
-              <div className="space-y-4">
-                {model.lineage.map((line, index) => (
-                  <div key={index} className="flex items-center justify-center py-4">
-                    <div className="text-center">
-                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Bot className="h-8 w-8 text-blue-600" />
+              <div className="flex flex-col items-center space-y-2">
+                {model.lineage.map((line, index) => {
+                  const isObject = line && typeof line === 'object' && !Array.isArray(line);
+                  const from = isObject ? (line.from || line.parent || line.parentName || line.source || '') : '';
+                  const to = isObject ? (line.to || line.child || line.childName || line.target || '') : '';
+                  const relationship = isObject ? (line.relationship || line.type || line.transition || '') : '';
+
+                  if (!isObject) {
+                    return (
+                      <div key={index} className="flex flex-col items-center">
+                        <div className="flex flex-col items-center">
+                          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-3">
+                            <Bot className="h-8 w-8 text-blue-600" />
+                          </div>
+                          <div className="bg-blue-50 rounded-lg px-6 py-3 border-2 border-blue-200">
+                            <p className="text-base font-semibold text-gray-900">{line}</p>
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-gray-700">
-                        {typeof line === 'string' ? line : JSON.stringify(line)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  }
+
+                  return (
+                    <React.Fragment key={index}>
+                      {/* From 노드 */}
+                      {from && index === 0 && (
+                        <div className="flex flex-col items-center">
+                          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-3">
+                            <Bot className="h-8 w-8 text-blue-600" />
+                          </div>
+                          <div className="bg-blue-50 rounded-lg px-6 py-3 border-2 border-blue-200">
+                            <p className="text-base font-semibold text-gray-900">{from}</p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* 화살표와 관계 텍스트 */}
+                      {(from || to) && (
+                        <div className="flex flex-col items-center py-2">
+                          <div className="w-0.5 h-8 bg-blue-300"></div>
+                          <div className="w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-blue-400"></div>
+                          {relationship && (
+                            <div className="mt-2 px-3 py-1 bg-blue-100 rounded-full">
+                              <span className="text-xs font-medium text-blue-700">{relationship}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* To 노드 */}
+                      {to && (
+                        <div className="flex flex-col items-center">
+                          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-3">
+                            <Bot className="h-8 w-8 text-blue-600" />
+                          </div>
+                          <div className="bg-blue-50 rounded-lg px-6 py-3 border-2 border-blue-200">
+                            <p className="text-base font-semibold text-gray-900">{to}</p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* 객체가 아니거나 from/to가 없는 경우 */}
+                      {!from && !to && (
+                        <div className="flex flex-col items-center">
+                          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-3">
+                            <Bot className="h-8 w-8 text-blue-600" />
+                          </div>
+                          <div className="bg-blue-50 rounded-lg px-6 py-3 border-2 border-blue-200">
+                            <p className="text-gray-700">{JSON.stringify(line)}</p>
+                          </div>
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </div>
             ) : (
               <div className="flex items-center justify-center py-8">
@@ -809,20 +956,6 @@ export const ModelDetail = () => {
                           className="text-gray-400 hover:text-gray-600"
                         >
                           {copiedHash === 'tx' ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {model.integrity.checksum && (
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <span className="text-sm font-medium text-gray-700">체크섬</span>
-                      <div className="flex items-center space-x-2">
-                        <code className="text-sm text-gray-900">{model.integrity.checksum}</code>
-                        <button
-                          onClick={() => copyToClipboard(model.integrity.checksum, 'checksum')}
-                          className="text-gray-400 hover:text-gray-600"
-                        >
-                          {copiedHash === 'checksum' ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
                         </button>
                       </div>
                     </div>

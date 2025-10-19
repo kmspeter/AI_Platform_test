@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Settings, Copy, Play, Trash2, RefreshCw } from 'lucide-react';
 
+// 배포용 API 엔드포인트 (ngrok 또는 고정 도메인)
+const API_BASE = 'https://8459f05797f9.ngrok-free.app';
+
 export const Playground = () => {
   const [messages, setMessages] = useState([]);
   const [prompt, setPrompt] = useState('');
@@ -10,7 +13,6 @@ export const Playground = () => {
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(1000);
   const [systemPrompt, setSystemPrompt] = useState('도움이 되는 AI 어시스턴트입니다.');
-  const [topP, setTopP] = useState(0.9);
   const [sessionId] = useState(`session-${Date.now()}`);
   const [totalCost, setTotalCost] = useState(0);
   const messagesEndRef = useRef(null);
@@ -63,7 +65,6 @@ export const Playground = () => {
 
     const userMessage = { role: 'user', content: prompt, timestamp: new Date() };
     setMessages(prev => [...prev, userMessage]);
-    const currentPrompt = prompt;
     setPrompt('');
     setLoading(true);
 
@@ -78,7 +79,7 @@ export const Playground = () => {
         user_id: 'playground-user'
       };
 
-      const response = await fetch('http://localhost:8000/api/chat/completions', {
+      const response = await fetch(`${API_BASE}/api/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -138,8 +139,8 @@ export const Playground = () => {
   };
 
   const exportToCurl = () => {
-    const curlCommand = `curl -X POST "http://localhost:8000/api/chat/completions" \\
-  -H "Content-Type: application/json" \\
+    const curlCommand = `curl -X POST "${API_BASE}/api/chat/completions" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "${model}",
     "messages": [
@@ -157,7 +158,7 @@ export const Playground = () => {
   };
 
   const exportToJavaScript = () => {
-    const jsCode = `const response = await fetch('http://localhost:8000/api/chat/completions', {
+    const jsCode = `const response = await fetch('${API_BASE}/api/chat/completions', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -186,7 +187,7 @@ console.log(data.content);`;
     const pyCode = `import requests
 
 response = requests.post(
-    'http://localhost:8000/api/chat/completions',
+    '${API_BASE}/api/chat/completions',
     headers={'Content-Type': 'application/json'},
     json={
         'model': '${model}',
@@ -395,22 +396,6 @@ print(data['content'])`;
                   <span>정확</span>
                   <span>창의적</span>
                 </div>
-              </div>
-
-              {/* Top-p를 온도 아래로 이동 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Top-p: {topP}
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={topP}
-                  onChange={(e) => setTopP(Number(e.target.value))}
-                  className="w-full accent-blue-600"
-                />
               </div>
 
               <div>
